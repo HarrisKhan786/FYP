@@ -2,6 +2,7 @@ package com.example.bodyfit.view
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -30,6 +31,9 @@ import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import com.example.bodyfit.R
 import com.example.bodyfit.view.Screen.Dashboard.route
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,7 +89,22 @@ fun DashboardTopBar(
                                 fontSize = 20.sp
                             )
                         ) {
-                            append("Harris")
+                            var userName by remember { mutableStateOf("") }
+
+                            val uid = Firebase.auth.currentUser?.uid
+                            val db = FirebaseFirestore.getInstance()
+
+                            LaunchedEffect(true) {
+                                uid?.let {
+                                    db.collection("users")
+                                        .document(it)
+                                        .get()
+                                        .addOnSuccessListener { doc ->
+                                            userName = doc.getString("name") ?: "User"
+                                        }
+                                }
+                            }
+                            append(userName)
                         }
                     },
                     modifier = Modifier.padding(start = 10.dp)
@@ -137,28 +156,32 @@ fun DashboardBottomBar(
         ) {
 
             BottomBarIcon(
-                icon = Icons.Filled.Person,
+                icon = Icons.Filled.PersonOutline,
+                label = "Profile & Settings",
                 selected = currentRoute == Screen.Profile.route
             ) {
                 navController.navigate(Screen.Profile.route)
             }
 
             BottomBarIcon(
-                icon = Icons.Outlined.Fullscreen,
+                icon = Icons.Outlined.GridView,
+                label = "Dashboard",
                 selected = currentRoute == Screen.Dashboard.route
             ) {
                 navController.navigate(Screen.Dashboard.route)
             }
 
             BottomBarIcon(
-                icon = Icons.Outlined.Tune,
+                icon = Icons.Outlined.TrackChanges,
+                label = "Goals",
                 selected = currentRoute == Screen.Goals.route
             ) {
                 navController.navigate(Screen.Goals.route)
             }
 
             BottomBarIcon(
-                icon = Icons.Outlined.RadioButtonUnchecked,
+                icon = Icons.Outlined.TrendingUp,
+                label = "Progress",
                 selected = currentRoute == Screen.Progress.route
             ) {
                 navController.navigate(Screen.Progress.route)
@@ -168,14 +191,29 @@ fun DashboardBottomBar(
 }
 
 @Composable
-fun BottomBarIcon(icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+fun BottomBarIcon(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
 
-    IconButton(onClick = onClick) {
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(30.dp),
+            contentDescription = label,
+            modifier = Modifier.size(26.dp),
             tint = if (selected)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected)
                 MaterialTheme.colorScheme.primary
             else
                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -319,6 +357,36 @@ fun DashboardContent(
 
         Spacer(modifier = Modifier.size(8.dp))
 
+        var caloriesGoal by remember { mutableStateOf(0) }
+        var caloriesProgress by remember { mutableStateOf(0f) }
+
+        val uid = Firebase.auth.currentUser?.uid
+        val db = FirebaseFirestore.getInstance()
+
+        LaunchedEffect(true) {
+
+            uid?.let {
+                db.collection("users")
+                    .document(it)
+                    .collection("goals")
+                    .document("userGoals")
+                    .get()
+                    .addOnSuccessListener { doc ->
+
+                        val goal = (doc.getLong("dailyCaloriesGoal") ?: 0).toFloat()
+                        val progress = (doc.getLong("caloriesProgress") ?: 0).toFloat()
+
+                        caloriesGoal = goal.toInt()
+                        caloriesProgress = progress
+                    }
+            }
+        }
+
+        val progressPercent =
+            if (caloriesGoal > 0) caloriesProgress / caloriesGoal else 0f
+
+        val percentageText = (progressPercent * 100).toInt()
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -337,12 +405,12 @@ fun DashboardContent(
                 Box(contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(75.dp),
-                        progress = 0.56f,
+                        progress = progressPercent,
                         strokeWidth = 8.dp,
                         color = Color.Black
                     )
                     Text(
-                        text = "56%",
+                        text = "$percentageText%",
                         fontWeight = FontWeight.Bold,
                         fontSize = 25.sp,
                         color = Color.Black
@@ -357,7 +425,7 @@ fun DashboardContent(
                         color = Color.Black
                     )
                     Text(
-                        text = "You've lost 70% of your\ndaily calories intake",
+                        text = "You have burned $caloriesProgress out of $caloriesGoal calories daily goal!",
                         fontSize = 16.sp,
                         color = Color.Gray
                     )
@@ -367,3 +435,42 @@ fun DashboardContent(
     }
 }
 
+@Composable
+fun GoalsSection() {
+
+    var steps by remember { mutableStateOf(0) }
+    var progress by remember { mutableStateOf(0) }
+
+    val uid = Firebase.auth.currentUser?.uid
+    val db = FirebaseFirestore.getInstance()
+
+    LaunchedEffect(true) {
+
+        uid?.let {
+
+            db.collection("users")
+                .document(it)
+                .collection("goals")
+                .document("userGoals")
+                .get()
+                .addOnSuccessListener { doc ->
+
+                    steps = (doc.getLong("dailyStepsGoal") ?: 0).toInt()
+                    progress = (doc.getLong("stepsProgress") ?: 0).toInt()
+
+                }
+        }
+    }
+
+    val percent = if (steps > 0) progress.toFloat() / steps else 0f
+
+    Column(modifier = Modifier.padding(16.dp)) {
+
+        Text("Steps Progress")
+
+        LinearProgressIndicator(progress = percent)
+
+        Text("$progress / $steps steps")
+
+    }
+}
