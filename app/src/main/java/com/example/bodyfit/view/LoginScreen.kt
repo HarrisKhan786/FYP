@@ -205,20 +205,20 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Image(painter = painterResource(R.drawable.google), "Sign up with Google", modifier = Modifier
-                .size(60.dp)
+                .size(20.dp)
                 .clickable {
 //                handle google sign in logic here
                 })
-            Image(painter = painterResource(R.drawable.facebook), "Sign up with Facebook", modifier = Modifier
-                .size(60.dp)
-                .clickable {
-//                Handle facebook sign in logic here
-                } )
-            Image(painter = painterResource(R.drawable.x_logo), "Sign up with X", modifier = Modifier
-                .size(60.dp)
-                .clickable {
-//                Handle X sign in logic hare
-                })
+//            Image(painter = painterResource(R.drawable.facebook), "Sign up with Facebook", modifier = Modifier
+//                .size(60.dp)
+//                .clickable {
+////                Handle facebook sign in logic here
+//                } )
+//            Image(painter = painterResource(R.drawable.x_logo), "Sign up with X", modifier = Modifier
+//                .size(60.dp)
+//                .clickable {
+////                Handle X sign in logic hare
+//                })
 
         }
 

@@ -19,17 +19,31 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProgressScreen() {
+fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
 
-    // Mock progress data (later from Firebase)
-    val stepsProgress = 0.7f
-    val workoutProgress = 0.5f
-    val calorieProgress = 0.8f
+//    getting data from firebase database
+    val data = viewModel.progressData
+
+    LaunchedEffect(Unit) {
+        viewModel.loadProgress(FirebaseAuth.getInstance().currentUser?.uid ?: return@LaunchedEffect)
+    }
+
+    if (data == null) {
+        Text("Loading...")
+        return
+    }
+
+    val stepsProgress = data.stepsProgress.toFloat() / data.dailyStepsGoal
+    val workoutProgress = data.workoutsProgress.toFloat() / data.WeeklyWorkoutsGoal
+    val calorieProgress = data.caloriesProgress.toFloat() / data.dailyCaloriesGoal
 
     Scaffold(
         topBar = {
@@ -54,19 +68,19 @@ fun ProgressScreen() {
             ProgressCard(
                 title = "Daily Steps",
                 progress = stepsProgress,
-                valueText = "7,000 / 10,000 steps"
+                valueText = "${data.stepsProgress} of ${data.dailyStepsGoal} Steps"
             )
 
             ProgressCard(
                 title = "Weekly Workouts",
                 progress = workoutProgress,
-                valueText = "3 / 6 sessions"
+                valueText = "${data.workoutsProgress} of ${data.WeeklyWorkoutsGoal} Sessions"
             )
 
             ProgressCard(
                 title = "Calories Burned",
                 progress = calorieProgress,
-                valueText = "1,600 / 2,000 kcal"
+                valueText = "${data.caloriesProgress} of ${data.dailyCaloriesGoal} kcal burned"
             )
 
             WeeklySummaryCard()
@@ -118,29 +132,29 @@ fun ProgressCard(
 
 // weekly score card
 @Composable
-fun WeeklySummaryCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    fun WeeklySummaryCard() {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
 
-            Text(
-                text = "Weekly Summary",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+                Text(
+                    text = "Weekly Summary",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "✔ Goals met: 2 / 3\n✔ Active days: 5\n✔ Consistency: Good",
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+                Text(
+                    text = "✔ Goals met: 2 / 3\n✔ Active days: 5\n✔ Consistency: Good",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
-    }
 }
 

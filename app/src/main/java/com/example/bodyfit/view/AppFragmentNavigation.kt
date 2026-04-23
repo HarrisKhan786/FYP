@@ -68,7 +68,9 @@ fun AppNavigator(paddingValues: PaddingValues) {
                 ProgressScreen()
             }
             composable(Screen.Profile.route) {
-                ProfileScreen()
+                ProfileScreen(onLogout = {
+                    navController.navigate(Screen.Login.route)
+                })
             }
             composable(Screen.Notifications.route) {
                 NotificationsScreen()
