@@ -12,9 +12,28 @@ class ProgressViewModel : ViewModel() {
     var progressData by mutableStateOf<ProgressData?>(null)
         private set
 
+    var isLoading by mutableStateOf(false)
+        private set
+
     fun loadProgress(userId: String) {
+        isLoading = true
         repository.getProgress(userId) { data ->
             progressData = data
+            isLoading = false
+        }
+    }
+
+    fun logWorkoutSession(userId: String) {
+        val current = progressData?.workoutsProgress ?: return
+        repository.incrementWorkouts(userId, current) {
+            // Reload so all values stay in sync
+            loadProgress(userId)
+        }
+    }
+
+    fun updateCalories(userId: String, calories: Int) {
+        repository.updateCalories(userId, calories) {
+            loadProgress(userId)
         }
     }
 }

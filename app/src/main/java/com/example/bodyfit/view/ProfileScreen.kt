@@ -1,7 +1,6 @@
 package com.example.bodyfit.view
 
 import android.net.Uri
-import android.widget.Button
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,10 +21,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,10 +35,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -51,13 +57,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.bodyfit.view.Screen
+import androidx.navigation.NavController
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.storage.storage
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,6 +73,8 @@ import com.google.firebase.storage.storage
 fun ProfileScreen(
     onLogout: () -> Unit = {}
 ) {
+    var showEditDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -85,13 +95,158 @@ fun ProfileScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
-            ProfileHeader()
+            ProfileHeader(onEditClick = { showEditDialog = true })
 
-            SettingsSection()
+            SettingsSection(onEditProfileClick = { showEditDialog = false })
 
             LogoutButton(onLogout = onLogout)
         }
+        if (showEditDialog) {
+            EditProfileDialog(onDismiss = { showEditDialog = false })
+        }
     }
+}
+
+// Dialogue for editing the profile
+@Composable
+fun EditProfileDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+
+    val auth = Firebase.auth
+    val db = FirebaseFirestore. getInstance()
+    val uid = auth.currentUser?.uid ?: return
+    val isEmailProvider = auth.currentUser?.providerData
+        ?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
+
+    var name            by remember { mutableStateOf("") }
+    var newPassword     by remember { mutableStateOf("") }
+    var currentPassword by remember { mutableStateOf("") }
+    var nameError       by remember { mutableStateOf("") }
+    var pwError         by remember { mutableStateOf("") }
+    var isSaving        by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        db.collection("users").document(uid).get()
+            .addOnSuccessListener { doc -> name = doc.getString("name") ?: "" }
+    }
+
+    AlertDialog(
+        onDismissRequest = {if(isSaving) onDismiss()},
+        title = {Text("Edit Profile", fontWeight = FontWeight.Bold)},
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {name = it; nameError = ""},
+                    label = {Text("Display Name")},
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                    isError = nameError.isNotEmpty(),
+                    supportingText = if (nameError.isNotEmpty()) {{ Text(nameError) }} else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (isEmailProvider) {
+                    HorizontalDivider()
+                    Text(
+                        text = "Change Password (Optional)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value         = currentPassword,
+                        onValueChange = { currentPassword = it; pwError = "" },
+                        label         = { Text("Current Password") },
+                        leadingIcon   = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        isError       = pwError.isNotEmpty(),
+                        singleLine    = true,
+                        modifier      = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value         = newPassword,
+                        onValueChange = { newPassword = it; pwError = "" },
+                        label         = { Text("New Password") },
+                        leadingIcon   = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        isError       = pwError.isNotEmpty(),
+                        supportingText = if (pwError.isNotEmpty()) {{ Text(pwError) }} else null,
+                        singleLine    = true,
+                        modifier      = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    nameError = if (name.isBlank()) "Name cannot be blank" else ""
+                    if (isEmailProvider && newPassword.isNotBlank()){
+                        if (currentPassword.isBlank()){
+                            pwError = "Enter your current password"
+                            return@TextButton
+                        }
+                        if (newPassword.length < 6) {
+                            pwError = "Password must be at least 6 characters"
+                            return@TextButton
+                        }
+                    }
+                    if (nameError.isNotEmpty()) return@TextButton
+
+                    isSaving = true
+
+                    //save data to the database
+                    db.collection("users").document(uid)
+                        .update("name", name.trim())
+                        .addOnSuccessListener {
+                            if (isEmailProvider && newPassword.isNotBlank() && currentPassword.isNotBlank()) {
+                                val email = auth.currentUser?.email ?: ""
+                                val credential = EmailAuthProvider.getCredential(email, currentPassword)
+
+                                auth.currentUser?.reauthenticate(credential)
+                                    ?.addOnSuccessListener {
+                                        auth.currentUser?.updatePassword(newPassword)
+                                            ?.addOnSuccessListener {
+                                                isSaving = false
+                                                Toast.makeText(context, "Profile & password updated!", Toast.LENGTH_SHORT).show()
+                                                onDismiss()
+                                            }
+                                            ?.addOnFailureListener { e ->
+                                                isSaving = false
+                                                pwError = e.message ?: "Failed to update password"
+                                            }
+                                    }
+                                    ?.addOnFailureListener {
+                                        isSaving = false
+                                        pwError = "Current password is incorrect"
+                                    }
+                            } else {
+                                isSaving = false
+                                Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
+                                onDismiss()
+                            }
+                        }
+
+                        .addOnFailureListener { e ->
+                            isSaving = false
+                            Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
+                        }
+
+                },
+                enabled = !isSaving
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Save")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { if (!isSaving) onDismiss() }) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
@@ -113,7 +268,9 @@ fun LogoutButton(onLogout: () -> Unit) {
 }
 
 @Composable
-fun SettingsSection() {
+fun SettingsSection(onEditProfileClick: () -> Unit = {}) {
+    val context = LocalContext.current
+
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
@@ -124,22 +281,30 @@ fun SettingsSection() {
 
             SettingsItem(
                 icon = Icons.Default.Notifications,
-                title = "Notifications"
+                title = "Notifications",
+                subtitle = "Manage workout reminders",
+                onClick = {
+                    Toast.makeText(context, "Navigating to Notifications...", Toast.LENGTH_SHORT).show()
+                }
             )
 
             Divider()
-
             SettingsItem(
                 icon = Icons.Default.DarkMode,
                 title = "Dark Mode",
-                subtitle = "Follow system theme"
+                subtitle = "Follow system theme",
+                onClick = {
+                    Toast.makeText(context, "The app follows the system defaults", Toast.LENGTH_LONG).show()
+                }
             )
 
             Divider()
 
             SettingsItem(
                 icon = Icons.Default.Edit,
-                title = "Edit Profile"
+                title = "Edit Profile",
+                subtitle = "Update name and password",
+                onClick = onEditProfileClick
             )
         }
     }
@@ -147,11 +312,11 @@ fun SettingsSection() {
 
 // settings items
 @Composable
-fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null) {
+fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null,  onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { }
+            .clickable { onClick()}
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -173,13 +338,19 @@ fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null) {
                 )
             }
         }
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 
 //A reusable profile header or toolbar
 @Composable
-fun ProfileHeader() {
+fun ProfileHeader(onEditClick: () -> Unit = {}) {
     val context = LocalContext.current
 
     var userName  by remember { mutableStateOf("") }
@@ -270,6 +441,15 @@ fun ProfileHeader() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FilledTonalButton(onClick = onEditClick) {
+            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Edit Profile")
+        }
+
     }
 }
 

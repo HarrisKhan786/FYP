@@ -309,7 +309,7 @@ fun DashboardContent(
                 caloriesProgress = (doc.getLong("caloriesProgress")   ?: 0).toFloat()
                 stepsGoal        = (doc.getLong("dailyStepsGoal")     ?: 0).toInt()
                 stepsProgress    = (doc.getLong("stepsProgress")      ?: 0).toInt()
-                workoutsGoal     = (doc.getLong("weeklyWorkoutsGoal") ?: 0).toInt()
+                workoutsGoal     = (doc.getLong("WeeklyWorkOutGoal") ?: 0).toInt()
                 workoutsProgress = (doc.getLong("workoutsProgress")   ?: 0).toInt()
             }
         onDispose { listener.remove() }

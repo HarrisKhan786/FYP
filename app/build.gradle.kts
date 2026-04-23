@@ -67,6 +67,9 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation(platform(libs.firebase.bom))
     implementation ("com.google.firebase:firebase-storage")
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    implementation("androidx.compose.ui:ui")
+
 
     implementation(libs.volley)
 
