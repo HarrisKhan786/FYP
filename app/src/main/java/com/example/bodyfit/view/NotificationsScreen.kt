@@ -8,6 +8,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,10 +29,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
+import androidx.navigation.NavController
 import com.example.bodyfit.R
 import java.util.Calendar
+import androidx.compose.material.icons.filled.Alarm
 
 
+const val CHANNEL_ID   = "bodyfit_reminders"
+const val CHANNEL_NAME = "Workout Reminders"
 data class Reminder(
     val id: Int,
     val title: String,
@@ -54,36 +62,64 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val title   = intent.getStringExtra("title") ?: "BodyFit Reminder"
         val message = intent.getStringExtra("message") ?: "Time for your workout!"
+        val notificationId = intent.getIntExtra("notificationId", 0)
 
-        val channelId = "bodyfit_reminders"
+        ensureChannel(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId, "Workout Reminders", NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = "BodyFit workout and goal reminders" }
-            nm.createNotificationChannel(channel)
-        }
-
-        val notification = NotificationCompat.Builder(context, channelId)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .build()
 
-        nm.notify(intent.getIntExtra("notifId", 0), notification)
+        nm.notify(notificationId, notification)
     }
 }
 
-//Alarms
+fun ensureChannel(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "BodyFit workout and goal reminders & Alerts"
+            enableVibration(true)
+            enableLights(true)
+        }
+        nm.createNotificationChannel(channel)
+    }
+}
+
+//Alarm helper functions
 private fun scheduleAlarm(context: Context, reminder: Reminder) {
+    ensureChannel(context)
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        !alarmManager.canScheduleExactAlarms()
+    ) {
+        Toast.makeText(
+            context,
+            "Please allow exact alarms in Settings > Apps > BodyFit > Alarms & Reminders",
+            Toast.LENGTH_LONG
+        ).show()
+        //Open system settings for permission request
+        val intent = Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        context.startActivity(intent)
+        return
+    }
+
     val intent = Intent(context, ReminderReceiver::class.java).apply {
         putExtra("title",   reminder.title)
-        putExtra("message", "Time for: ${reminder.title}")
-        putExtra("notifId", reminder.id)
+        putExtra("message", "⏰ Time for: ${reminder.title}")
+        putExtra("notificationId", reminder.id)
     }
     val pi = PendingIntent.getBroadcast(
         context, reminder.id, intent,
@@ -94,16 +130,21 @@ private fun scheduleAlarm(context: Context, reminder: Reminder) {
         set(Calendar.HOUR_OF_DAY, reminder.hour)
         set(Calendar.MINUTE,      reminder.minute)
         set(Calendar.SECOND,      0)
-        // If the time is already past today, schedule for tomorrow
-        if (before(Calendar.getInstance())) add(Calendar.DAY_OF_YEAR, 1)
+        // If the set time is already past today, schedule alert for tomorrow
+        if (timeInMillis <= System.currentTimeMillis()) {
+            add(Calendar.DAY_OF_YEAR, 1)
+        }
     }
 
-    alarmManager.setRepeating(
-        AlarmManager.RTC_WAKEUP,
-        cal.timeInMillis,
-        AlarmManager.INTERVAL_DAY,
-        pi
-    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            cal.timeInMillis,
+            pi
+        )
+    } else {
+        alarmManager.setExact(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
+    }
 }
 
 private fun cancelAlarm(context: Context, reminderId: Int) {
@@ -116,27 +157,43 @@ private fun cancelAlarm(context: Context, reminderId: Int) {
     alarmManager.cancel(pi)
 }
 
-//screen
+// reminders screen design starts here
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen() {
+fun NotificationsScreen(navController: NavController) {
 
     val context = LocalContext.current
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            Toast.makeText(context, "Notifications are disabled. You won't see reminders.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        ensureChannel(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     // Master toggle
+    LaunchedEffect(Unit) { ensureChannel(context) }
     var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
 
-    // Reminder list – starts with two defaults
+    // Reminder list, starts with two default reminders
     var reminders by remember {
         mutableStateOf(
             listOf(
-                Reminder(id = 1001, title = "Morning Workout",  hour = 6,  minute = 0),
-                Reminder(id = 1002, title = "Evening Stretch",  hour = 19, minute = 30)
+                Reminder(id = 1001, title = "Morning Run",  hour = 6,  minute = 30),
+                Reminder(id = 1002, title = "Evening Jog",  hour = 19, minute = 0)
             )
         )
     }
 
-    // Add-reminder dialog state
+    // Added reminder dialog state
     var showAddDialog   by remember { mutableStateOf(false) }
     var showTimePicker  by remember { mutableStateOf(false) }
     var newTitle        by remember { mutableStateOf("") }
@@ -148,6 +205,14 @@ fun NotificationsScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector        = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
                 title = { Text("Notifications & Reminders") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,

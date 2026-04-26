@@ -71,6 +71,7 @@ import com.google.firebase.storage.storage
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    navController: NavController,
     onLogout: () -> Unit = {}
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
@@ -97,7 +98,8 @@ fun ProfileScreen(
 
             ProfileHeader(onEditClick = { showEditDialog = true })
 
-            SettingsSection(onEditProfileClick = { showEditDialog = false })
+            SettingsSection( onNotificationsClick = { navController.navigate(Screen.Notifications.route)
+            }, onEditProfileClick = { showEditDialog = true })
 
             LogoutButton(onLogout = onLogout)
         }
@@ -268,7 +270,7 @@ fun LogoutButton(onLogout: () -> Unit) {
 }
 
 @Composable
-fun SettingsSection(onEditProfileClick: () -> Unit = {}) {
+fun SettingsSection(onEditProfileClick: () -> Unit = {}, onNotificationsClick: () -> Unit = {}) {
     val context = LocalContext.current
 
     Card(
@@ -283,9 +285,7 @@ fun SettingsSection(onEditProfileClick: () -> Unit = {}) {
                 icon = Icons.Default.Notifications,
                 title = "Notifications",
                 subtitle = "Manage workout reminders",
-                onClick = {
-                    Toast.makeText(context, "Navigating to Notifications...", Toast.LENGTH_SHORT).show()
-                }
+                onClick = onNotificationsClick
             )
 
             Divider()

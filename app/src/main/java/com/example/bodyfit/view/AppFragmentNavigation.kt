@@ -6,11 +6,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-
+import androidx.navigation.navArgument
 
 
 @Composable
@@ -58,8 +59,7 @@ fun AppNavigator(paddingValues: PaddingValues) {
                 SignUpScreen(navController, paddingValues)
             }
             composable(Screen.Dashboard.route) {
-                DashboardScreen(
-                )
+                DashboardScreen(navController = navController)
             }
             composable(Screen.Goals.route) {
                 GoalSettingScreen(navController)
@@ -67,13 +67,28 @@ fun AppNavigator(paddingValues: PaddingValues) {
             composable(Screen.Progress.route) {
                 ProgressScreen()
             }
+            composable(Screen.Notifications.route){ 
+                NotificationsScreen(
+                    navController = navController
+                )
+            }
             composable(Screen.Profile.route) {
-                ProfileScreen(onLogout = {
-                    navController.navigate(Screen.Login.route)
+                ProfileScreen(
+                    navController = navController,
+                    onLogout = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 })
             }
-            composable(Screen.Notifications.route) {
-                NotificationsScreen()
+            composable(
+                route = Screen.Workout.route,
+                arguments = listOf(navArgument("category") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val rawCategory = backStackEntry.arguments?.getString("category") ?: "Full body"
+                val category = Screen.Workout.decodeCategory(rawCategory)
+
+                WorkoutScreen(category = category, navController = navController)
             }
         }
     }

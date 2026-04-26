@@ -1,5 +1,8 @@
 package com.example.bodyfit.view
+import android.Manifest
 import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,29 +43,49 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.bodyfit.R
-import com.example.bodyfit.view.Screen.Dashboard.route
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import android.os.Build
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.text.style.TextAlign
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
+    navController: NavController,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val activity = context as Activity
 
-    LaunchedEffect(true) {
-        GoogleFitAuth.requestPermissions(activity)
-        GoogleFitManager.readAndSyncSteps(context)
+    val activityRecognitionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            if (GoogleFitAuth.hasAllPermissions(activity)) {
+                GoogleFitManager.readAndSyncSteps(context)
+            } else {
+                GoogleFitAuth.requestFitPermissions(activity)
+            }
+        }
     }
 
-    DashboardContent(
-        modifier = modifier.fillMaxSize()
-
-    )
+    LaunchedEffect(true) {
+        when {
+            GoogleFitAuth.hasAllPermissions(activity) -> {
+                GoogleFitManager.readAndSyncSteps(context)
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                activityRecognitionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+            }
+            else -> {
+                GoogleFitAuth.requestFitPermissions(activity)
+            }
+        }
+    }
+    DashboardContent(navController = navController, modifier = modifier.fillMaxSize())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -267,11 +290,9 @@ fun BottomBarIcon(icon: ImageVector, label: String, selected: Boolean, onClick: 
 }
 
 @Composable
-fun WorkoutChip(text: String) {
-    var selected by remember { mutableStateOf(false) }
-
+fun WorkoutChip(text: String, selected: Boolean, onClick: () -> Unit) {
     AssistChip(
-        onClick = { selected = !selected },
+        onClick = onClick,
         label = {
             Text(text)
         },
@@ -284,10 +305,12 @@ fun WorkoutChip(text: String) {
 }
 
 @Composable
-fun DashboardContent(
+fun DashboardContent( navController: NavController,
     modifier: Modifier = Modifier
 ) {
     val workOutCategories = listOf("Full body", "Cardio", "Cross Fit", "Cyclist", "Glutes", "Power")
+
+    var selectedCategory by remember { mutableStateOf(workOutCategories.first()) }
 
     var caloriesGoal     by remember { mutableStateOf(0) }
     var caloriesProgress by remember { mutableStateOf(0f) }
@@ -315,6 +338,8 @@ fun DashboardContent(
         onDispose { listener.remove() }
     }
 
+    val currentPlan = WorkoutData.getPlan(selectedCategory)
+
     val caloriePercent  = if (caloriesGoal > 0) caloriesProgress / caloriesGoal else 0f
     val calorieText     = (caloriePercent * 100).toInt()
 
@@ -330,48 +355,46 @@ fun DashboardContent(
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(workOutCategories) {
-                WorkoutChip(it)
+            items(workOutCategories) { category ->
+                WorkoutChip(
+                    text = category,
+                    selected = category == selectedCategory,
+                    onClick  = { selectedCategory = category }
+                )
             }
         }
 
         Spacer(modifier = Modifier.size(8.dp))
 
         //featured work out banner
-
         Box(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(colorResource(id = R.color.light_purple))
+                .fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
+                modifier = Modifier.padding(20.dp) .fillMaxWidth()
             ) {
-
-                Row(
+                Text(
+                    text = currentPlan?.tagline ?: selectedCategory,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                    color = Color.Black,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Loose\nbelly fat",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 30.sp,
-                        color = Color.Black
-                    )
+                    textAlign = TextAlign.Start
+                )
 
-                    Button(
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(6.dp),
-                        onClick = { /* TODO */ },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colorResource(id = R.color.purple_200)
-                        )
-                    ) {
-                        Text("Intermediate level", color = Color.White, fontSize = 18.sp)
-                    }
-                }
+                Spacer(modifier = Modifier.size(8.dp))
+
+                Text(
+                    text = currentPlan?.level?.let { "$it level" } ?: "Select level",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Start
+                )
+
 
                 Spacer(modifier = Modifier.size(8.dp))
 
@@ -382,10 +405,11 @@ fun DashboardContent(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Spacer(modifier = Modifier.weight(0.5f))
-                        Image(
-                            painter = painterResource(id = R.drawable.dumbell),
-                            contentDescription = "Dumbbell",
-                            modifier = Modifier.size(200.dp)
+                        Icon(
+                            imageVector = currentPlan?.icon ?: Icons.Default.FitnessCenter,
+                            contentDescription = null,
+                            modifier = Modifier.size(200.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -403,7 +427,7 @@ fun DashboardContent(
                     )
 
                     Text(
-                        text = "40 minutes",
+                        text = currentPlan?.totalMinutes?.let { "$it minutes" } ?: "0 minutes",
                         fontSize = 18.sp,
                         color = Color.Black,
                         modifier = Modifier.padding(start = 5.dp)
@@ -411,7 +435,7 @@ fun DashboardContent(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    TextButton(onClick = { /* TODO */ }) {
+                    TextButton(onClick = { navController.navigate(Screen.Workout.createRoute(selectedCategory))}) {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(
                                 text = "Start",

@@ -248,7 +248,7 @@ fun GoalBarChartCard(
                         legend.isEnabled      = false
                         setTouchEnabled(false)
                         setDrawBarShadow(true)
-                        setDrawValueAboveBar(true)
+                        setDrawValueAboveBar(false)
 
                         xAxis.apply {
                             position        = XAxis.XAxisPosition.BOTTOM
@@ -269,20 +269,18 @@ fun GoalBarChartCard(
                         }
 
                         axisRight.isEnabled = false
-                        setExtraOffsets(8f, 8f, 8f, 8f)
+                        setExtraOffsets(8f, 8f, 20f, 8f)
                     }
                 },
                 update = { chart ->
                     val percent = (progress * 100f).coerceIn(0f, 100f)
 
-                    val entry   = BarEntry(0f, percent)
+                    val entry = BarEntry(0f, percent)
                     val dataSet = BarDataSet(listOf(entry), title).apply {
-                        color          = barColor
-                        // Shadow shows the "remaining" portion
+                        color = barColor
                         barShadowColor = AndroidColor.argb(30, 0, 0, 0)
                         valueTextSize  = 13f
                         valueTextColor = textArgb
-                        // Show "72%" instead of "72.0"
                         valueFormatter = PercentFormatter()
                         setDrawValues(true)
                     }

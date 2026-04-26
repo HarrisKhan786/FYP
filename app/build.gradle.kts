@@ -63,15 +63,17 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation("com.google.firebase:firebase-auth-ktx:23.2.1")
     implementation("com.google.android.gms:play-services-fitness:21.1.0")
-    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    implementation("com.google.android.gms:play-services-auth:21.5.1")
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation(platform(libs.firebase.bom))
     implementation ("com.google.firebase:firebase-storage")
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.navigation:navigation-compose:2.8.0")
 
 
     implementation(libs.volley)
+    implementation(libs.androidx.navigation.common.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

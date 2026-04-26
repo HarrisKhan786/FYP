@@ -23,6 +23,7 @@ firebaseFirestoreKtx = "26.1.1"
 firebaseFirestore = "26.1.1"
 firebaseStorageKtx = "22.0.1"
 volley = "1.2.1"
+navigationCommonKtx = "2.9.8"
 
 [libraries]
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
@@ -56,6 +57,7 @@ firebase-firestore-ktx = { group = "com.google.firebase", name = "firebase-fires
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
 firebase-storage-ktx = { group = "com.google.firebase", name = "firebase-storage-ktx", version.ref = "firebaseStorageKtx" }
 volley = { group = "com.android.volley", name = "volley", version.ref = "volley" }
+androidx-navigation-common-ktx = { group = "androidx.navigation", name = "navigation-common-ktx", version.ref = "navigationCommonKtx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
