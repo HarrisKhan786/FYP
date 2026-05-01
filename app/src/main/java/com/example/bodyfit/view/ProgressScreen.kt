@@ -4,6 +4,7 @@ import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -29,6 +31,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.github.mikephil.charting.data.BarData
 import com.github.mikephil.charting.data.BarDataSet
 import com.github.mikephil.charting.data.BarEntry
+import kotlinx.coroutines.launch
 
 //Progress screen
 
@@ -36,12 +39,22 @@ import com.github.mikephil.charting.data.BarEntry
 @Composable
 fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
 
-    val uid     = FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    val data    = viewModel.progressData
+    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val data = viewModel.progressData
     val loading = viewModel.isLoading
 
-    var showCalorieDialog  by remember { mutableStateOf(false) }
+    var showCalorieDialog by remember { mutableStateOf(false) }
     var showWorkoutConfirm by remember { mutableStateOf(false) }
+
+    val snackBarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(viewModel.feedbackMessage) {
+        viewModel.feedbackMessage?.let { msg ->
+            scope.launch { snackBarHostState.showSnackbar(msg) }
+            viewModel.clearFeedback()
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (uid.isNotBlank()) viewModel.loadProgress(uid)
@@ -56,7 +69,8 @@ fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackBarHostState) }
     ) { padding ->
 
         when {
@@ -71,18 +85,24 @@ fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
             }
 
             data != null -> {
-                val stepsRatio   = if (data.dailyStepsGoal > 0)
+                val stepsRatio = if (data.dailyStepsGoal > 0)
                     (data.stepsProgress.toFloat() / data.dailyStepsGoal).coerceIn(0f, 1f) else 0f
                 val workoutRatio = if (data.WeeklyWorkoutsGoal > 0)
-                    (data.workoutsProgress.toFloat() / data.WeeklyWorkoutsGoal).coerceIn(0f, 1f) else 0f
+                    (data.workoutsProgress.toFloat() / data.WeeklyWorkoutsGoal).coerceIn(
+                        0f,
+                        1f
+                    ) else 0f
                 val calorieRatio = if (data.dailyCaloriesGoal > 0)
-                    (data.caloriesProgress.toFloat() / data.dailyCaloriesGoal).coerceIn(0f, 1f) else 0f
+                    (data.caloriesProgress.toFloat() / data.dailyCaloriesGoal).coerceIn(
+                        0f,
+                        1f
+                    ) else 0f
 
-                val goalsMet    = listOf(stepsRatio, workoutRatio, calorieRatio).count { it >= 1f }
+                val goalsMet = listOf(stepsRatio, workoutRatio, calorieRatio).count { it >= 1f }
                 val consistency = when (goalsMet) {
-                    3    -> "Excellent 🏆"
-                    2    -> "Good 💪"
-                    1    -> "Keep going 🔥"
+                    3 -> "Excellent 🏆"
+                    2 -> "Good 💪"
+                    1 -> "Keep going 🔥"
                     else -> "Just getting started"
                 }
 
@@ -95,47 +115,51 @@ fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
                 ) {
                     // Steps bar chart
                     GoalBarChartCard(
-                        title    = "Daily Steps",
+                        title = "Daily Steps",
                         progress = stepsRatio,
-                        current  = data.stepsProgress,
-                        goal     = data.dailyStepsGoal,
-                        unit     = "steps",
+                        current = data.stepsProgress,
+                        goal = data.dailyStepsGoal,
+                        unit = "steps",
                         barColor = AndroidColor.rgb(76, 175, 80)
                     )
 
                     // Workouts bar chart + log button
                     GoalBarChartCard(
-                        title       = "Weekly Workouts",
-                        progress    = workoutRatio,
-                        current     = data.workoutsProgress,
-                        goal        = data.WeeklyWorkoutsGoal,
-                        unit        = "sessions",
-                        barColor    = AndroidColor.rgb(33, 150, 243),
+                        title = "Weekly Workouts",
+                        progress = workoutRatio,
+                        current = data.workoutsProgress,
+                        goal = data.WeeklyWorkoutsGoal,
+                        unit = "sessions",
+                        barColor = AndroidColor.rgb(33, 150, 243),
                         actionLabel = "Log Session",
-                        actionIcon  = Icons.Default.FitnessCenter,
-                        onAction    = { showWorkoutConfirm = true }
+                        actionIcon = Icons.Default.FitnessCenter,
+                        actionEnabled = data.workoutsProgress < data.WeeklyWorkoutsGoal,
+                        onAction = { showWorkoutConfirm = true }
+
+
                     )
 
                     // Calories bar chart + update button
                     GoalBarChartCard(
-                        title       = "Calories Burned",
-                        progress    = calorieRatio,
-                        current     = data.caloriesProgress,
-                        goal        = data.dailyCaloriesGoal,
-                        unit        = "kcal",
-                        barColor    = AndroidColor.rgb(255, 152, 0),
+                        title = "Calories Burned",
+                        progress = calorieRatio,
+                        current = data.caloriesProgress,
+                        goal = data.dailyCaloriesGoal,
+                        unit = "kcal",
+                        barColor = AndroidColor.rgb(255, 152, 0),
                         actionLabel = "Update",
-                        actionIcon  = Icons.Default.LocalFireDepartment,
-                        onAction    = { showCalorieDialog = true }
+                        actionIcon = Icons.Default.LocalFireDepartment,
+                        actionEnabled = data.caloriesProgress < data.dailyCaloriesGoal,
+                        onAction = { showCalorieDialog = true }
                     )
 
                     // Radar overview + summary
                     OverviewRadarCard(
-                        stepsRatio   = stepsRatio,
+                        stepsRatio = stepsRatio,
                         workoutRatio = workoutRatio,
                         calorieRatio = calorieRatio,
-                        goalsMet     = goalsMet,
-                        consistency  = consistency
+                        goalsMet = goalsMet,
+                        consistency = consistency
                     )
                 }
             }
@@ -156,9 +180,9 @@ fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
     if (showWorkoutConfirm) {
         AlertDialog(
             onDismissRequest = { showWorkoutConfirm = false },
-            icon    = { Icon(Icons.Default.FitnessCenter, null) },
-            title   = { Text("Log Workout Session") },
-            text    = { Text("Add 1 workout session to your weekly count?") },
+            icon = { Icon(Icons.Default.FitnessCenter, null) },
+            title = { Text("Log Workout Session") },
+            text = { Text("Add 1 workout session to your weekly count?") },
             confirmButton = {
                 TextButton(onClick = {
                     showWorkoutConfirm = false
@@ -172,19 +196,81 @@ fun ProgressScreen(viewModel: ProgressViewModel = viewModel()) {
     }
 
     if (showCalorieDialog) {
-        CalorieInputDialog(
-            currentCalories = data?.caloriesProgress ?: 0,
-            onConfirm = { value ->
-                showCalorieDialog = false
-                viewModel.updateCalories(uid, value)
-            },
-            onDismiss = { showCalorieDialog = false }
-        )
+        val remaining = (data?.dailyCaloriesGoal ?: 0) - (data?.caloriesProgress ?: 0)
+        if (showCalorieDialog) {
+            val remaining = (data?.dailyCaloriesGoal ?: 0) - (data?.caloriesProgress ?: 0)
+            CumulativeCalorieDialog(
+                remainingCalories = remaining,
+                onConfirm = { additional ->
+                    showCalorieDialog = false
+                    viewModel.addCalories(uid, additional)
+                },
+                onDismiss = { showCalorieDialog = false }
+            )
+        }
     }
 }
 
-//Hanling horizontal chart for each goal
+private fun ratio(progress: Int, goal: Int): Float =
+    if (goal > 0) (progress.toFloat() / goal).coerceIn(0f, 1f) else 0f
 
+@Composable
+fun CumulativeCalorieDialog(
+    remainingCalories: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var input by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon    = { Icon(Icons.Default.LocalFireDepartment, null) },
+        title   = { Text("Add Calories Burned") },
+        text    = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // ✅ Show remaining calories so user knows how much room is left
+                Text(
+                    text  = "Remaining today: $remainingCalories kcal",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text  = "Enter calories to add to today's total:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value           = input,
+                    onValueChange   = { input = it; error = "" },
+                    label           = { Text("Calories to add (kcal)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    isError         = error.isNotEmpty(),
+                    supportingText  = if (error.isNotEmpty()) {{ Text(error) }} else null,
+                    singleLine      = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val v = input.toIntOrNull()
+                when {
+                    v == null || v <= 0 -> error = "Enter a number greater than 0"
+                    // Warn but still allow — repository will cap at goal
+                    v > remainingCalories -> error = "Exceeds remaining budget ($remainingCalories kcal). Will be capped."
+                    else -> onConfirm(v)
+                }
+                // If only the calories warning, allow confirm on second tap
+                if (error.contains("capped")) {
+                    val v2 = input.toIntOrNull()
+                    if (v2 != null && v2 > 0) { error = ""; onConfirm(v2) }
+                }
+            }) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+//Handling horizontal chart for each goal
 @Composable
 fun GoalBarChartCard(
     title: String,
@@ -195,6 +281,7 @@ fun GoalBarChartCard(
     barColor: Int,
     actionLabel: String? = null,
     actionIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    actionEnabled: Boolean = true,
     onAction: (() -> Unit)? = null
 ) {
     val textArgb = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
@@ -216,7 +303,8 @@ fun GoalBarChartCard(
 
                 if (actionLabel != null && actionIcon != null && onAction != null) {
                     FilledTonalButton(
-                        onClick        = onAction,
+                        onClick = onAction,
+                        enabled = actionEnabled,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(actionIcon, null, modifier = Modifier.size(16.dp))
@@ -233,6 +321,23 @@ fun GoalBarChartCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(Modifier.height(12.dp))
+            // When at 100%, show goal reached
+            if (progress >= 1f) {
+                Text(
+                    text  = "Goal reached! 🎉  $current / $goal $unit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            } else {
+                Text(
+                    text  = "${(progress * 100).toInt()}% complete  •  $current / $goal $unit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
 

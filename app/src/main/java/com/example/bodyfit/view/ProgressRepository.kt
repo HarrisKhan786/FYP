@@ -32,19 +32,38 @@ class ProgressRepository {
             .addOnFailureListener { onResult(null) }
     }
 
-    /** Increment workout session count by 1 */
-    fun incrementWorkouts(userId: String, current: Int, onDone: () -> Unit) {
+    //Increment workout session count by 1
+    fun incrementWorkouts(userId: String, current: Int, goalMax: Int, onDone: (exceeded: Boolean) -> Unit) {
+        if (current >= goalMax) {
+            onDone(true)
+            return
+        }
         db.collection("users").document(userId)
             .collection("goals").document("userGoals")
             .update("workoutsProgress", current + 1)
-            .addOnCompleteListener { onDone() }
+            .addOnCompleteListener { onDone(false) }
     }
 
-    /** Update calories burned */
-    fun updateCalories(userId: String, calories: Int, onDone: () -> Unit) {
-        db.collection("users").document(userId)
+    //Update calories burned
+    fun addCalories(
+        userId: String,
+        additionalCalories: Int,
+        goalMax: Int,
+        onDone: (newTotal: Int, exceeded: Boolean) -> Unit
+    ) {
+        val docRef = db.collection("users").document(userId)
             .collection("goals").document("userGoals")
-            .update("caloriesProgress", calories)
-            .addOnCompleteListener { onDone() }
+
+        // Read current value fresh from Firestore before writing
+        docRef.get().addOnSuccessListener { doc ->
+            val currentProgress = (doc.getLong("caloriesProgress") ?: 0).toInt()
+            val newTotal        = (currentProgress + additionalCalories).coerceAtMost(goalMax)
+            val exceeded        = (currentProgress + additionalCalories) > goalMax
+
+            docRef.update("caloriesProgress", newTotal)
+                .addOnCompleteListener { onDone(newTotal, exceeded) }
+        }.addOnFailureListener {
+            onDone(0, false)
+        }
     }
 }

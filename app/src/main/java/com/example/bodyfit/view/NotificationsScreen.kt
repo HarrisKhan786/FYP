@@ -33,10 +33,50 @@ import androidx.navigation.NavController
 import com.example.bodyfit.R
 import java.util.Calendar
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.WbTwilight
 
+//Motivation messages to encourage users to stay fit and stick to their programs
+object MotivationalMessages {
 
+    val morning = listOf(
+        "🌅 Rise and grind! Your goals won't chase themselves.",
+        "☀️ Good morning! A workout today keeps regrets away.",
+        "🏃 Start your day strong — every step counts!",
+        "💪 Morning movers are goal achievers. Let's go!",
+        "🌄 Today is a new chance to be better than yesterday."
+    )
+
+    val afternoon = listOf(
+        "⚡ Afternoon slump? A quick workout will fix that!",
+        "🔥 You're halfway through the day — keep the momentum!",
+        "💥 Push through! Champions are made in the afternoon grind.",
+        "🏋️ Time to move! Your body thanks you later.",
+        "🎯 Stay focused. Your goals are worth every drop of sweat."
+    )
+
+    val evening = listOf(
+        "🌙 End your day strong — log that evening session!",
+        "⭐ Evenings are for winners who finish what they started.",
+        "🌟 One last push before rest — you've got this!",
+        "🛌 Sleep better knowing you gave today your all.",
+        "🔝 Evening workouts build tomorrow's strength."
+    )
+
+    fun getRandom(hour: Int): String = when (hour) {
+        in 5..11  -> morning.random()
+        in 12..17 -> afternoon.random()
+        else      -> evening.random()
+    }
+}
+//notification singe source of truth - constants
 const val CHANNEL_ID   = "bodyfit_reminders"
 const val CHANNEL_NAME = "Workout Reminders"
+
+const val NOTIF_MORNING   = 2001
+const val NOTIF_AFTERNOON = 2002
+const val NOTIF_EVENING   = 2003
 data class Reminder(
     val id: Int,
     val title: String,
@@ -60,23 +100,47 @@ data class Reminder(
 
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val title   = intent.getStringExtra("title") ?: "BodyFit Reminder"
-        val message = intent.getStringExtra("message") ?: "Time for your workout!"
+        ensureChannel(context)
+        val isMotivational = intent.getBooleanExtra("motivational", false)
+        val hour           = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+
+        val title   = if (isMotivational)
+            when (hour) {
+                in 5..11  -> "🌅 Good Morning, Champion!"
+                in 12..17 -> "⚡ Afternoon Boost!"
+                else      -> "🌙 Evening Check-In!"
+            }
+        else intent.getStringExtra("title") ?: "BodyFit Reminder"
+
+        val message = if (isMotivational)
+            MotivationalMessages.getRandom(hour)
+        else
+            intent.getStringExtra("message") ?: "Time for your workout!"
+
         val notificationId = intent.getIntExtra("notificationId", 0)
 
-        ensureChannel(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .build()
 
-        nm.notify(notificationId, notification)
+        nm.notify(intent.getIntExtra("notificationId", 0), notification)
+
+        val reminder = Reminder(
+            id      = intent.getIntExtra("notificationId", 0),
+            title   = title,
+            hour    = intent.getIntExtra("hour", hour),
+            minute  = intent.getIntExtra("minute", 0),
+            enabled = true
+        )
+        scheduleAlarm(context, reminder, isMotivational)
     }
 }
 
@@ -97,7 +161,7 @@ fun ensureChannel(context: Context) {
 }
 
 //Alarm helper functions
-private fun scheduleAlarm(context: Context, reminder: Reminder) {
+private fun scheduleAlarm(context: Context, reminder: Reminder, motivational: Boolean = false) {
     ensureChannel(context)
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -120,6 +184,9 @@ private fun scheduleAlarm(context: Context, reminder: Reminder) {
         putExtra("title",   reminder.title)
         putExtra("message", "⏰ Time for: ${reminder.title}")
         putExtra("notificationId", reminder.id)
+        putExtra("hour", reminder.hour)
+        putExtra("minute", reminder.minute)
+        putExtra("motivational", motivational)
     }
     val pi = PendingIntent.getBroadcast(
         context, reminder.id, intent,
@@ -157,6 +224,25 @@ private fun cancelAlarm(context: Context, reminderId: Int) {
     alarmManager.cancel(pi)
 }
 
+fun scheduleMotivationalNotifications(context: Context) {
+    listOf(
+        Triple(NOTIF_MORNING,   7,  0),
+        Triple(NOTIF_AFTERNOON, 13, 0),
+        Triple(NOTIF_EVENING,   19, 0)
+    ).forEach { (id, hour, minute) ->
+        scheduleAlarm(
+            context,
+            Reminder(id = id, title = "BodyFit", hour = hour, minute = minute),
+            motivational = true
+        )
+    }
+}
+
+fun cancelMotivationalNotifications(context: Context) {
+    listOf(NOTIF_MORNING, NOTIF_AFTERNOON, NOTIF_EVENING)
+        .forEach { cancelAlarm(context, it) }
+}
+
 // reminders screen design starts here
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -181,6 +267,7 @@ fun NotificationsScreen(navController: NavController) {
 
     // Master toggle
     LaunchedEffect(Unit) { ensureChannel(context) }
+    var motivationalEnabled      by rememberSaveable { mutableStateOf(true) }
     var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
 
     // Reminder list, starts with two default reminders
@@ -191,6 +278,10 @@ fun NotificationsScreen(navController: NavController) {
                 Reminder(id = 1002, title = "Evening Jog",  hour = 19, minute = 0)
             )
         )
+    }
+
+    LaunchedEffect(Unit) {
+        if (motivationalEnabled) scheduleMotivationalNotifications(context)
     }
 
     // Added reminder dialog state
@@ -236,16 +327,31 @@ fun NotificationsScreen(navController: NavController) {
                 onToggle = { enabled ->
                     notificationsEnabled = enabled
                     if (!enabled) {
-                        // Cancel every scheduled alarm
+                        // Cancel every scheduled notification
                         reminders.forEach { cancelAlarm(context, it.id) }
+                        cancelMotivationalNotifications(context)
                     } else {
-                        // Re-enable all that were switched on
+                        // Re-enable all notification that were switched on
                         reminders.filter { it.enabled }.forEach { scheduleAlarm(context, it) }
+                        if (motivationalEnabled) scheduleMotivationalNotifications(context)
                     }
                 }
             )
 
-            // Section header
+            // Section header for motivation and schedules reminders
+            Text("Daily Motivation",
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+            MotivationalToggleCard(
+                enabled       = motivationalEnabled && notificationsEnabled,
+                masterEnabled = notificationsEnabled,
+                onToggle      = { enabled ->
+                    motivationalEnabled = enabled
+                    if (enabled && notificationsEnabled) scheduleMotivationalNotifications(context)
+                    else cancelMotivationalNotifications(context)
+                }
+            )
+
             Text(
                 text = "Scheduled Reminders",
                 style = MaterialTheme.typography.titleMedium,
@@ -387,9 +493,60 @@ fun NotificationsScreen(navController: NavController) {
         )
     }
 }
+//motivation card which is automated
+@Composable
+fun MotivationalToggleCard(
+    enabled: Boolean,
+    masterEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        shape  = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Daily Motivational Messages", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Receive inspiring messages three times a day",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = enabled, onCheckedChange = onToggle, enabled = masterEnabled)
+            }
+
+            HorizontalDivider()
+
+            // Show the three fixed times with their period icons
+            listOf(
+                Triple(Icons.Default.WbSunny,   "Morning",   "7:00 AM"),
+                Triple(Icons.Default.WbTwilight, "Afternoon", "1:00 PM"),
+                Triple(Icons.Default.Nightlight, "Evening",   "7:00 PM")
+            ).forEach { (icon, label, time) ->
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        icon, label,
+                        tint     = if (enabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column {
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                        Text(time,  style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
 //Reminder card
-
 @Composable
 fun ReminderCard(
     reminder: Reminder,

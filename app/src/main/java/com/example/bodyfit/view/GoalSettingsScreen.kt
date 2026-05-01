@@ -49,6 +49,16 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 
+//single source of truth
+object GoalLimits {
+    const val STEPS_MIN    = 7_000
+    const val STEPS_MAX    = 15_000
+    const val WORKOUT_MIN  = 3
+    const val WORKOUT_MAX  = 6
+    const val CALORIE_MIN  = 1_600
+    const val CALORIE_MAX  = 3_000
+}
+
 
 //Display Saved Goals
 data class SavedGoals(
@@ -63,9 +73,13 @@ data class SavedGoals(
 fun GoalSettingScreen(
     navController: NavController
 ) {
+    // variables for storing the values and the error messages
     var steps by remember { mutableStateOf("") }
     var workouts by remember { mutableStateOf("") }
     var calories by remember { mutableStateOf("") }
+    var stepsError    by remember { mutableStateOf("") }
+    var workoutsError by remember { mutableStateOf("") }
+    var caloriesError by remember { mutableStateOf("") }
 
 //reading the existing goals
     var savedGoals by remember { mutableStateOf<SavedGoals?> (null)}
@@ -134,29 +148,46 @@ fun GoalSettingScreen(
             GoalInputCard(
                 label = "Daily Steps Goal",
                 value = steps,
-                onValueChange = { steps = it },
-                unit = "steps"
+                onValueChange = { steps = it
+                                stepsError = validateSteps(it)},
+                unit = "steps",
+                hint = "You need to set between ${GoalLimits.STEPS_MIN.formatK()} and ${GoalLimits.STEPS_MAX.formatK()} steps",
+                errorMessage = stepsError
             )
 
             GoalInputCard(
                 label = "Weekly Workouts",
                 value = workouts,
-                onValueChange = { workouts = it },
-                unit = "sessions"
+                onValueChange = { workouts = it
+                                workoutsError = validateWorkouts(it)},
+                unit = "sessions",
+                hint  = "You need to set between ${GoalLimits.WORKOUT_MIN} and ${GoalLimits.WORKOUT_MAX} sessions per week",
+                errorMessage = workoutsError
             )
 
             GoalInputCard(
                 label = "Daily Calories Burn",
                 value = calories,
-                onValueChange = { calories = it },
-                unit = "kcal"
+                onValueChange = { calories = it
+                                caloriesError = validateCalories(it)},
+                unit = "kcal",
+                hint = "You need to set between ${GoalLimits.CALORIE_MIN} and ${GoalLimits.CALORIE_MAX} kcal",
+                errorMessage = caloriesError
             )
 
             Button(
                 onClick = {
+                    stepsError    = validateSteps(steps)
+                    workoutsError = validateWorkouts(workouts)
+                    caloriesError = validateCalories(calories)
                     // The Logic for saving the goals to firebase
                     if (steps.isEmpty() || workouts.isEmpty() || calories.isEmpty()){
                         Toast.makeText(context, "All Fields are Required!", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
+                    if (stepsError.isNotEmpty() || workoutsError.isNotEmpty() || caloriesError.isNotEmpty()) {
+                        Toast.makeText(context, "Please fix the errors above to proceed", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
@@ -311,7 +342,9 @@ fun GoalInputCard(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    unit: String
+    unit: String,
+    hint: String,
+    errorMessage: String = ""
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -325,6 +358,11 @@ fun GoalInputCard(
                 text = label,
                 style = MaterialTheme.typography.titleMedium
             )
+            Text(
+                text  = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -335,11 +373,48 @@ fun GoalInputCard(
                 trailingIcon = {
                     Text(unit, color = MaterialTheme.colorScheme.primary)
                 },
+                isError = errorMessage.isNotEmpty(),
+                supportingText = if (errorMessage.isNotEmpty()){
+                    { Text(errorMessage, color = MaterialTheme.colorScheme.error)}
+                } else null,
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
         }
     }
 }
+//Helper functions for validation of input details
+private fun validateSteps(input: String): String {
+    if (input.isBlank()) return "Steps goal is required"
+    val v = input.toIntOrNull() ?: return "Enter a valid number"
+    return when {
+        v < GoalLimits.STEPS_MIN -> "Minimum is ${GoalLimits.STEPS_MIN.formatK()} steps"
+        v > GoalLimits.STEPS_MAX -> "Maximum is ${GoalLimits.STEPS_MAX.formatK()} steps"
+        else -> ""
+    }
+}
+
+private fun validateWorkouts(input: String): String {
+    if (input.isBlank()) return "Workout sessions goal is required"
+    val v = input.toIntOrNull() ?: return "Enter a valid number"
+    return when {
+        v < GoalLimits.WORKOUT_MIN -> "Minimum is ${GoalLimits.WORKOUT_MIN} sessions"
+        v > GoalLimits.WORKOUT_MAX -> "Maximum is ${GoalLimits.WORKOUT_MAX} sessions"
+        else -> ""
+    }
+}
+
+private fun validateCalories(input: String): String {
+    if (input.isBlank()) return "Calorie goal is required"
+    val v = input.toIntOrNull() ?: return "Enter a valid number"
+    return when {
+        v < GoalLimits.CALORIE_MIN -> "Minimum is ${GoalLimits.CALORIE_MIN} kcal"
+        v > GoalLimits.CALORIE_MAX -> "Maximum is ${GoalLimits.CALORIE_MAX} kcal"
+        else -> ""
+    }
+}
+
+private fun Int.formatK() = if (this >= 1000) "${this / 1000}k" else "$this"
+
 
 
