@@ -67,28 +67,36 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.compose.ui.res.stringResource
 
+// handles all the user authentication entry points
+// leads to successful login, or signup
 @Composable
 fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
 
+    // login form state
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
+
+    //inline validation error messages
     var emailError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
 
     val context = LocalContext.current
 
+    // Load the running animation using lottie animation
     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.running))
     val progress by animateLottieCompositionAsState(
         isPlaying = true,
         composition = composition,
-        iterations = LottieConstants.IterateForever,
-        speed = 0.7f
+        iterations = LottieConstants.IterateForever, // loop forever
+        speed = 0.7f // slightly slower than the normal speed
     )
 
     // Launcher to handle results from Google Sign-In screen
+    // contains the results code where 10 or 0 shows SHA-1 mismatch
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -100,6 +108,7 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             try {
                 val account = task.getResult(ApiException::class.java)
                 val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+                // hand the firebase credentials to the sign in handler
                 handleFirebaseSignIn(credential, context, navController)
             } catch (e: ApiException) {
                 Log.e("GOOGLE_AUTH", "Status Code: ${e.statusCode}")
@@ -107,6 +116,7 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             }
 
         } else {
+            // try to extract the exception so that we can handle the exact error code for debug
             try {
                 val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
                 task.getResult(ApiException::class.java)
@@ -117,6 +127,8 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
         }
     }
 
+    // The Login UI starts here with a column
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -124,7 +136,7 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-
+        // loading of the lottie animation shown at the top of the screen
         LottieAnimation(
             modifier = Modifier
                 .size(200.dp)
@@ -133,14 +145,16 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             progress = {progress}
         )
 
+        // header text - salutation
+
         Text( text = "Welcome Back, we missed you!")
 
         Spacer(modifier = Modifier.height(5.dp))
-
+        // Title that tells the user we are in login page
         Text(text = "Login", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
 
         Spacer(modifier = Modifier.height(10.dp))
-
+        // email field that doubles as inline error fiel
         TextField(value = email, onValueChange = {
             email =it
         }, label = {
@@ -160,7 +174,7 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             )
 
         Spacer(modifier = Modifier.height(8.dp))
-
+        // password field with visibility toggle icon - eye
         TextField(value = password, onValueChange = {
             password = it
         }, label = {
@@ -169,16 +183,17 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             leadingIcon = {
                 Icon(Icons.Rounded.Lock, contentDescription = "")
             },
+            //handling click to show or hide password
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            // eye icon for password visibility toggle
             trailingIcon = {
-                Modifier.size(32.dp)
                 val image = if (passwordVisible)
                     painterResource(id= R.drawable.visibility_24)
                 else painterResource(id= R.drawable.visibility_off_24)
 
                 Icon(
                     painter = image,
-                    contentDescription = "",
+                    contentDescription = if (passwordVisible) "Hide password" else "Show password",
                     modifier = Modifier
                         .clickable{passwordVisible = !passwordVisible}
                 )
@@ -194,16 +209,18 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             )
 
         Spacer(modifier = Modifier.height(10.dp))
-
+        // Login button that validates the user inputs and then calls SignInUserWithEmailAndPassword
         Button(onClick = {
+            // validating the email and password fields before making a network call
             emailError = if (email.isBlank()) "Email is required!" else ""
             passwordError = if (password.isBlank()) "Password is required!" else ""
             if (emailError.isEmpty() && passwordError.isEmpty()) {
-//                Handle Login logic here
+             // Login logic for firebase authentication
                 Firebase.auth.signInWithEmailAndPassword(email, password)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
                             Toast.makeText(context, "Sign in Successful, Welcome Back", Toast.LENGTH_SHORT).show()
+                            // navigate to dashboard and clear the backstack so that navigating back does not take you to login but exits the app
                             navController.navigate("dashboard"){
                                 popUpTo("login") { inclusive = true}
                             }
@@ -224,7 +241,7 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
         }
 
         Spacer(modifier = Modifier.height(10.dp))
-
+        // forgot password field that requires the email to be filled in so that the firebase knows which email address to send reset code to.
         Text(text = "forgot password?",
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.clickable{
@@ -246,14 +263,14 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
             })
 
         Spacer(modifier = Modifier.height(10.dp))
-
+        // Navigation link to take unregistered users to register screen for registration
         Row {
             Text(text = "Not a Member?")
-            Text(text = "sign up",
+            Text(text = "Sign Up",
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                 .clickable{
-            // Registration logic
+            // Registration logic -  go to registration screen upon click
                 navController.navigate("register")
              })
         }
@@ -277,14 +294,15 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
                     .height(50.dp)
                     .padding(horizontal = 16.dp)
                     .clickable {
-                        // Trigger Google Sign-In Logic here
+                        // Trigger Google Sign-In Logic here -  build GoogleSignInOptions requesting server ID token and email
                         val gso = GoogleSignInOptions
                             .Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                            .requestIdToken(context.getString(R.string.default_web_client_id)) // Important!
+                            .requestIdToken(context.getString(R.string.default_web_client_id))
                             .requestEmail()
                             .build()
 
                         val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                        // Sign out first so the account picker always appears, Without this, returning users are re-authenticated silently with their last account and never see the picker again.
                         googleSignInClient.signOut().addOnCompleteListener{
                             googleSignInLauncher.launch(googleSignInClient.signInIntent)
 
@@ -319,7 +337,7 @@ fun LoginScreen(navController: NavController, paddingValues: PaddingValues){
     }
 
 }
-
+// Complete a firebase sign in after credentials have been validated
 private fun handleFirebaseSignIn(credential: AuthCredential, context: Context, navController: NavController) {
     val auth = Firebase.auth
     val db = FirebaseFirestore.getInstance()
@@ -327,11 +345,13 @@ private fun handleFirebaseSignIn(credential: AuthCredential, context: Context, n
     auth.signInWithCredential(credential)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
+                // use the user returned from the task result
                 task.result?.user?.let { user ->
                     val isNewUser = task.result?.additionalUserInfo?.isNewUser ?: false
 
                     if (isNewUser) {
-                        // push user details to Firestore
+                        // push user details to Firestore for google sign for new users
+                        // The documentID is the user UID helping for future look ups
                         val userData = hashMapOf(
                             "uid" to user.uid,
                             "name" to (user.displayName ?: "User"),
@@ -364,7 +384,7 @@ private fun handleFirebaseSignIn(credential: AuthCredential, context: Context, n
                                 ).show()
                             }
                     } else {
-                        // Existing user - Navigate to Dashboard
+                        // Existing user - Navigate to Dashboard, no firestore database write needed
                         Toast.makeText(
                             context,
                             "Welcome back, ${user.displayName}!",
@@ -379,6 +399,11 @@ private fun handleFirebaseSignIn(credential: AuthCredential, context: Context, n
                     "Authentication failed: No user found",
                     Toast.LENGTH_SHORT
                 ).show()
+            }
+            else {
+                // Firebase rejected the credential — log and show the error
+                Log.e("FIREBASE_AUTH", "signInWithCredential failed: ${task.exception?.message}")
+                Toast.makeText(context, "Authentication failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
             }
         }
 }

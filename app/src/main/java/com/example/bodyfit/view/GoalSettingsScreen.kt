@@ -174,7 +174,7 @@ fun GoalSettingScreen(
                 hint = "You need to set between ${GoalLimits.CALORIE_MIN} and ${GoalLimits.CALORIE_MAX} kcal",
                 errorMessage = caloriesError
             )
-
+            // onClick, the button validates the inputs and then saves the goals to firestore under user id
             Button(
                 onClick = {
                     stepsError    = validateSteps(steps)

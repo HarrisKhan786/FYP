@@ -2,10 +2,12 @@ package com.example.bodyfit.view
 
 import com.google.firebase.firestore.FirebaseFirestore
 
+// Data access layer for all progress related firestore reads and writes
+// all methods are async and communicates through callbacks
 class ProgressRepository {
-
+    // Shared firestore instance for class operations
     private val db = FirebaseFirestore.getInstance()
-
+    // fetches complete data snapshot from firestore
     fun getProgress(userId: String, onResult: (ProgressData?) -> Unit) {
         db.collection("users")
             .document(userId)
@@ -14,9 +16,10 @@ class ProgressRepository {
             .get()
             .addOnSuccessListener { doc ->
                 if (!doc.exists()) {
-                    // Document missing → user has never set goals
+                    // Document missing; user has never set goals
                     onResult(ProgressData(goalsExist = false))
                 } else {
+                    // match each firestore field to corresponding progress data property
                     val data = ProgressData(
                         stepsProgress    = (doc.getLong("stepsProgress")     ?: 0).toInt(),
                         dailyStepsGoal   = (doc.getLong("dailyStepsGoal")    ?: 0).toInt(),
@@ -29,6 +32,7 @@ class ProgressRepository {
                     onResult(data)
                 }
             }
+            // network error or denied, return null object
             .addOnFailureListener { onResult(null) }
     }
 

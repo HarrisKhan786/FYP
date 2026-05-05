@@ -35,6 +35,7 @@ data class WorkoutPlan(
     val exercises: List<Exercise>
 )
 
+//Contains details for all the data that is displayed when a certain category is selected
 object WorkoutData {
 
     val plans: Map<String, WorkoutPlan> = mapOf(

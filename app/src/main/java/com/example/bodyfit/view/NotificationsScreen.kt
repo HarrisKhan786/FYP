@@ -97,7 +97,6 @@ data class Reminder(
 }
 
 // broadcast deliver
-
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         ensureChannel(context)

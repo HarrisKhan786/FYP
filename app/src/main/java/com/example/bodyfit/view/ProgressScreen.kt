@@ -256,7 +256,7 @@ fun CumulativeCalorieDialog(
                 when {
                     v == null || v <= 0 -> error = "Enter a number greater than 0"
                     // Warn but still allow — repository will cap at goal
-                    v > remainingCalories -> error = "Exceeds remaining budget ($remainingCalories kcal). Will be capped."
+                    v > remainingCalories -> error = "Exceeds remaining count ($remainingCalories kcal). Will be capped."
                     else -> onConfirm(v)
                 }
                 // If only the calories warning, allow confirm on second tap
@@ -316,24 +316,23 @@ fun GoalBarChartCard(
 
             Spacer(Modifier.height(4.dp))
 
-            Text(
-                text  = "${(progress * 100).toInt()}% complete  •  $current / $goal $unit",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+//            Text(
+//                text  = "${(progress * 100).toInt()}% complete  *  $current of $goal $unit target",
+//                style = MaterialTheme.typography.bodySmall,
+//                color = MaterialTheme.colorScheme.onSurfaceVariant
+//            )
 
-            Spacer(Modifier.height(12.dp))
             // When at 100%, show goal reached
             if (progress >= 1f) {
                 Text(
-                    text  = "Goal reached! 🎉  $current / $goal $unit",
+                    text  = "Goal reached! 🎉  $current of $goal $unit achieved",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )
             } else {
                 Text(
-                    text  = "${(progress * 100).toInt()}% complete  •  $current / $goal $unit",
+                    text  = "${(progress * 100).toInt()}% complete  *  $current of $goal $unit aachieved",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

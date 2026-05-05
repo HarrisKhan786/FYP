@@ -67,13 +67,14 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.storage.storage
-
+// The user profile and settings hub with header, settings, dialog for editing, and navigation wiring.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    navController: NavController,
-    onLogout: () -> Unit = {}
+    navController: NavController, // used to navigate to notifications
+    onLogout: () -> Unit = {} // clears backstack on logout
 ) {
+    // controls visibility of the edit profile dialog
     var showEditDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -95,21 +96,22 @@ fun ProfileScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
+            // contains profile picture, name, email, and quick edit button
             ProfileHeader(onEditClick = { showEditDialog = true })
-
+            // template setting rows which are clickable
             SettingsSection( onNotificationsClick = { navController.navigate(Screen.Notifications.route)
             }, onEditProfileClick = { showEditDialog = true })
 
             LogoutButton(onLogout = onLogout)
         }
+        // shows the edit dialogue as overlay when requested
         if (showEditDialog) {
             EditProfileDialog(onDismiss = { showEditDialog = false })
         }
     }
 }
 
-// Dialogue for editing the profile
+// Dialogue for editing the profile, edit display name and optionally password
 @Composable
 fun EditProfileDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -117,26 +119,28 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
     val auth = Firebase.auth
     val db = FirebaseFirestore. getInstance()
     val uid = auth.currentUser?.uid ?: return
+    // check if the account uses email or google signin
     val isEmailProvider = auth.currentUser?.providerData
         ?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
-
+    // initial form state
     var name            by remember { mutableStateOf("") }
     var newPassword     by remember { mutableStateOf("") }
     var currentPassword by remember { mutableStateOf("") }
     var nameError       by remember { mutableStateOf("") }
     var pwError         by remember { mutableStateOf("") }
-    var isSaving        by remember { mutableStateOf(false) }
-
+    var isSaving        by remember { mutableStateOf(false) } // button is disabled while saving
+    // name is prefilled from firebase to ensure use know stheir current value
     LaunchedEffect(Unit) {
         db.collection("users").document(uid).get()
             .addOnSuccessListener { doc -> name = doc.getString("name") ?: "" }
     }
 
     AlertDialog(
-        onDismissRequest = {if(isSaving) onDismiss()},
+        onDismissRequest = {if(isSaving) onDismiss()}, // block dismisses while saving details
         title = {Text("Edit Profile", fontWeight = FontWeight.Bold)},
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // name field is always visible
                 OutlinedTextField(
                     value = name,
                     onValueChange = {name = it; nameError = ""},
@@ -147,7 +151,7 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-
+                // password section only visible for email auth users
                 if (isEmailProvider) {
                     HorizontalDivider()
                     Text(
@@ -155,6 +159,7 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // current passowrd need for reauthentication before update
                     OutlinedTextField(
                         value         = currentPassword,
                         onValueChange = { currentPassword = it; pwError = "" },
@@ -194,18 +199,20 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
                             return@TextButton
                         }
                     }
+                    // validate name
                     if (nameError.isNotEmpty()) return@TextButton
 
                     isSaving = true
 
-                    //save data to the database
+                    //save data to the database, updated display name
                     db.collection("users").document(uid)
                         .update("name", name.trim())
                         .addOnSuccessListener {
+                            // change password if the user provided one during registration
                             if (isEmailProvider && newPassword.isNotBlank() && currentPassword.isNotBlank()) {
                                 val email = auth.currentUser?.email ?: ""
                                 val credential = EmailAuthProvider.getCredential(email, currentPassword)
-
+                                // reauthenticate the user to ensure that they know their current password
                                 auth.currentUser?.reauthenticate(credential)
                                     ?.addOnSuccessListener {
                                         auth.currentUser?.updatePassword(newPassword)
@@ -223,6 +230,7 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
                                         isSaving = false
                                         pwError = "Current password is incorrect"
                                     }
+                                // name only update
                             } else {
                                 isSaving = false
                                 Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
@@ -238,6 +246,7 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
                 },
                 enabled = !isSaving
             ) {
+                // show a spinner inside button while saving
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
@@ -250,7 +259,7 @@ fun EditProfileDialog(onDismiss: () -> Unit) {
         }
     )
 }
-
+// full width button that handles firebase.auth.signout()
 @Composable
 fun LogoutButton(onLogout: () -> Unit) {
     Button(
@@ -269,6 +278,7 @@ fun LogoutButton(onLogout: () -> Unit) {
     }
 }
 
+// card containing the three settings items which are wired to their real actions
 @Composable
 fun SettingsSection(onEditProfileClick: () -> Unit = {}, onNotificationsClick: () -> Unit = {}) {
     val context = LocalContext.current
@@ -287,7 +297,7 @@ fun SettingsSection(onEditProfileClick: () -> Unit = {}, onNotificationsClick: (
                 subtitle = "Manage workout reminders",
                 onClick = onNotificationsClick
             )
-
+            // dark mode which displays toast since the app follows system theme
             Divider()
             SettingsItem(
                 icon = Icons.Default.DarkMode,
@@ -310,7 +320,8 @@ fun SettingsSection(onEditProfileClick: () -> Unit = {}, onNotificationsClick: (
     }
 }
 
-// settings items
+// settings items, single row in settings section card
+// Displays an icon, title, optional subtitle and a chevron on the right
 @Composable
 fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null,  onClick: () -> Unit = {}) {
     Row(
@@ -339,6 +350,7 @@ fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null,  on
             }
         }
         Spacer(modifier = Modifier.weight(1f))
+        // chevron icon indicates that the item is clickable
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = null,
@@ -348,7 +360,7 @@ fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null,  on
 }
 
 
-//A reusable profile header or toolbar
+//A reusable profile header or toolbar, user avatar, email, name, and edit profile
 @Composable
 fun ProfileHeader(onEditClick: () -> Unit = {}) {
     val context = LocalContext.current
@@ -357,7 +369,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
     var userEmail by remember { mutableStateOf("") }
     var photoUrl  by remember { mutableStateOf<String?>(null) }
     var uploading by remember { mutableStateOf(false) }
-
+    // load user data from firestore on first composition
     LaunchedEffect(Unit) {
         val uid = Firebase.auth.currentUser?.uid ?: return@LaunchedEffect
         userEmail = Firebase.auth.currentUser?.email ?: ""
@@ -369,7 +381,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
                 photoUrl = doc.getString("photoUrl")
             }
     }
-
+    // image picker for user to select image from the gallery
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -380,7 +392,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
             uri = uri,
             uid = uid,
             onSuccess = { downloadUrl ->
-                photoUrl  = downloadUrl
+                photoUrl  = downloadUrl // updates the UI immediately without having to load from firestore
                 uploading = false
                 Toast.makeText(context, "Profile photo updated!", Toast.LENGTH_SHORT).show()
             },
@@ -395,6 +407,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
+        // avatar box which when tapped launches the image picker
         Box(
             modifier = Modifier
                 .size(90.dp)
@@ -423,7 +436,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
                     modifier = Modifier.size(48.dp)
                 )
             }
-
+            // spinner shown on the avatar is the image uploading is in progress
             if (uploading) {
                 CircularProgressIndicator(modifier = Modifier.size(30.dp))
             }
@@ -443,7 +456,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
         )
 
         Spacer(modifier = Modifier.height(8.dp))
-
+        // Quick access edit button for profile editting
         FilledTonalButton(onClick = onEditClick) {
             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
@@ -453,6 +466,7 @@ fun ProfileHeader(onEditClick: () -> Unit = {}) {
     }
 }
 
+// Uploads a profile image to Firebase Storage and updates the user's Firestore document
 private fun uploadProfileImage(
     uri: Uri,
     uid: String,
@@ -463,11 +477,13 @@ private fun uploadProfileImage(
         .child("profile_images/$uid.jpg")
 
     storageRef.putFile(uri)
+    // If the upload itself failed, re-throw so addOnFailureListener catches it
         .continueWithTask { task ->
             if (!task.isSuccessful) task.exception?.let { throw it }
             storageRef.downloadUrl
         }
         .addOnSuccessListener { downloadUri ->
+            // Persist the download URL to Firestore so ProfileHeader and DashboardTopBar, can load it via Coil on subsequent app launches
             val url = downloadUri.toString()
             FirebaseFirestore.getInstance()
                 .collection("users").document(uid)

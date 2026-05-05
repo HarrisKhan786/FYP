@@ -108,7 +108,7 @@ fun WorkoutScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    "${plan.totalMinutes} min",
+                                    "${plan.totalMinutes} mins",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -129,7 +129,7 @@ fun WorkoutScreen(
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
-                            //we display the level badge
+                            // display the level badge
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
                                 color = levelColor.copy(alpha = 0.15f)
@@ -166,7 +166,7 @@ fun WorkoutScreen(
                 )
             }
 
-            // ── Exercise cards (expandable) ───────────────────────────────────
+            //Exercise cards  which is expandable
             itemsIndexed(plan.exercises) { index, exercise ->
                 ExerciseCard(index = index + 1, exercise = exercise)
             }

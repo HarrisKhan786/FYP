@@ -50,28 +50,32 @@ import android.os.Build
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.text.style.TextAlign
 
-
+// Contains all the composables that make the main authenticated screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
-    navController: NavController,
+    navController: NavController, // needed so that the click of workout category navigates to workout details screen
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val activity = context as Activity
-
+    // Google fit permission launcher
     val activityRecognitionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
+            // Both layers satisfied — safe to read step data now
             if (GoogleFitAuth.hasAllPermissions(activity)) {
                 GoogleFitManager.readAndSyncSteps(context)
             } else {
+                // ACTIVITY_RECOGNITION granted but Fit OAuth not yet — request it
                 GoogleFitAuth.requestFitPermissions(activity)
+               // Steps will be read on the next launch when hasAllPermissions() = true
             }
         }
+        // If denied: degrade gracefully; steps simply show as 0
     }
-
+    // when launched for the first time, decided which permission step is required
     LaunchedEffect(true) {
         when {
             GoogleFitAuth.hasAllPermissions(activity) -> {
@@ -85,20 +89,25 @@ fun DashboardScreen(
             }
         }
     }
+    // rendering the main dashboard body
     DashboardContent(navController = navController, modifier = modifier.fillMaxSize())
 }
 
+// Top app bar that shows only on dashboard screen
+// has profile photo, personalised greetings, and notification bell with a red badge
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardTopBar(
     onNotificationClick: () -> Unit = {}
 ) {
+    // state for the user display name and profile photo url
     var userName by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf<String?>(null) }
 
     val uid = Firebase.auth.currentUser?.uid
     val db  = FirebaseFirestore.getInstance()
 
+    // fetch the user name and the profile photo url from firebase storage and firestore
     LaunchedEffect(true) {
         uid?.let {
             db.collection("users").document(it).get()
@@ -123,7 +132,7 @@ fun DashboardTopBar(
                     .padding(horizontal = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
+                // circular profile picture that loads from firestore storage, falls back to drawable
                 Box(
                     modifier = Modifier
                         .size(65.dp)
@@ -139,15 +148,16 @@ fun DashboardTopBar(
                             modifier = Modifier.size(90.dp).clip(CircleShape)
                         )
                     } else {
-                        Image(
-                            painter = painterResource(id = R.drawable.profile),
-                            contentDescription = "Profile picture",
-                            contentScale = ContentScale.Crop
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile Picture",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(48.dp)
                         )
                     }
 
                 }
-
+                //Greetings text with user name in bold
                 Text(
                     buildAnnotatedString {
                         append("Hello, ")
@@ -179,7 +189,7 @@ fun DashboardTopBar(
                 )
 
                 Spacer(modifier = Modifier.weight(1f))
-
+                // Bell icon with red badge as a dot for navigating to notifications and reminders
                 BadgedBox(
                     badge = {
                         Badge(
@@ -200,7 +210,10 @@ fun DashboardTopBar(
     )
 }
 
-
+// Bottom bar shown on the four main authenticated screens
+// hidden on login, register, work out details, and notifications
+// It holds profile, dashboard, goals, and progress tabs
+// The active tab is highlighted using the primary theme color
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardBottomBar(
@@ -258,6 +271,8 @@ fun DashboardBottomBar(
     }
 }
 
+// bottom bar icon and label used in dashboard bottom bar
+// it applies the primary colour when selected
 @Composable
 fun BottomBarIcon(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
 
@@ -289,6 +304,8 @@ fun BottomBarIcon(icon: ImageVector, label: String, selected: Boolean, onClick: 
     }
 }
 
+// workout chip which has mutually exclusive selection using in workout category lazy row
+// unselected has white background and selected has black background, depending on user theme
 @Composable
 fun WorkoutChip(text: String, selected: Boolean, onClick: () -> Unit) {
     AssistChip(
@@ -303,15 +320,16 @@ fun WorkoutChip(text: String, selected: Boolean, onClick: () -> Unit) {
         border = BorderStroke(1.dp, Color.Black)
     )
 }
-
+// Scrollable body that contains workout category, featured workout, calories, and today's goals
 @Composable
 fun DashboardContent( navController: NavController,
     modifier: Modifier = Modifier
 ) {
     val workOutCategories = listOf("Full body", "Cardio", "Cross Fit", "Cyclist", "Glutes", "Power")
 
+    // currently selected workout category defaults to the firt item
     var selectedCategory by remember { mutableStateOf(workOutCategories.first()) }
-
+    // goals and current state progress loaded from firestore database
     var caloriesGoal     by remember { mutableStateOf(0) }
     var caloriesProgress by remember { mutableStateOf(0f) }
     var stepsGoal        by remember { mutableStateOf(0) }
@@ -321,7 +339,7 @@ fun DashboardContent( navController: NavController,
 
     val uid = Firebase.auth.currentUser?.uid
     val db  = FirebaseFirestore.getInstance()
-
+    // realtime snapshot listener for data changes
     DisposableEffect(uid) {
         if (uid == null) return@DisposableEffect onDispose {}
         val listener = db.collection("users").document(uid)
@@ -335,14 +353,15 @@ fun DashboardContent( navController: NavController,
                 workoutsGoal     = (doc.getLong("WeeklyWorkOutGoal") ?: 0).toInt()
                 workoutsProgress = (doc.getLong("workoutsProgress")   ?: 0).toInt()
             }
+        // removes the listener when the composable is removed from the tree
         onDispose { listener.remove() }
     }
-
+    // look up the workout plan for the currently selected category
     val currentPlan = WorkoutData.getPlan(selectedCategory)
-
+    // precalculate the calories percentage for the circular indicator
     val caloriePercent  = if (caloriesGoal > 0) caloriesProgress / caloriesGoal else 0f
     val calorieText     = (caloriePercent * 100).toInt()
-
+    // UI layout
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -351,7 +370,7 @@ fun DashboardContent( navController: NavController,
     ) {
 
         Spacer(modifier = Modifier.size(8.dp))
-
+        // workout category chip which is scrollable horizontally and reactively updates the banner below it
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -366,7 +385,7 @@ fun DashboardContent( navController: NavController,
 
         Spacer(modifier = Modifier.size(8.dp))
 
-        //featured work out banner
+        //featured work out banner, the tagline level badge, duration, and start button read from current category.
         Box(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
@@ -377,6 +396,7 @@ fun DashboardContent( navController: NavController,
             Column(
                 modifier = Modifier.padding(20.dp) .fillMaxWidth()
             ) {
+                // Display selected workout tagline
                 Text(
                     text = currentPlan?.tagline ?: selectedCategory,
                     fontWeight = FontWeight.Bold,
@@ -388,16 +408,43 @@ fun DashboardContent( navController: NavController,
 
                 Spacer(modifier = Modifier.size(8.dp))
 
-                Text(
-                    text = currentPlan?.level?.let { "$it level" } ?: "Select level",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Start
-                )
+                // Level colours
+                val levelColor = when (currentPlan?.level) {
+                    "Beginner"     -> Color(0xFF4CAF50)
+                    "Intermediate" -> Color(0xFFFF9800)
+                    "Advanced"     -> Color(0xFFF44336)
+                    else           -> MaterialTheme.colorScheme.primary
+                }
+
+                // display selected workout difficulty level badge
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = levelColor.copy(alpha = 0.15f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Star, null,
+                            tint = levelColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text(
+                            text = currentPlan?.level?.let { "$it level" } ?: "Select level",
+                            color = levelColor,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Start
+                        )
+                    }
+                }
+
 
 
                 Spacer(modifier = Modifier.size(8.dp))
-
+                // Display the image associated with the category
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(30.dp))
@@ -434,7 +481,7 @@ fun DashboardContent( navController: NavController,
                     )
 
                     Spacer(modifier = Modifier.weight(1f))
-
+                    // start button that takes the user to workout details
                     TextButton(onClick = { navController.navigate(Screen.Workout.createRoute(selectedCategory))}) {
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(
@@ -457,7 +504,8 @@ fun DashboardContent( navController: NavController,
         Spacer(modifier = Modifier.size(8.dp))
 
         // calories burned progress card
-
+        // Circular progress indicator showing today's calorie burn vs goal
+        // Values come from the real-time Firestore snapshot listener above
         var caloriesGoal by remember { mutableStateOf(0) }
         var caloriesProgress by remember { mutableStateOf(0f) }
 
@@ -535,8 +583,8 @@ fun DashboardContent( navController: NavController,
         }
 
         Spacer(modifier = Modifier.size(8.dp))
-        // Goals summary card
 
+        // Goals summary card
         Text(
             text = "Today's Goals",
             style = MaterialTheme.typography.titleMedium,
@@ -545,7 +593,7 @@ fun DashboardContent( navController: NavController,
         )
 
         Spacer(modifier = Modifier.size(8.dp))
-
+        // Goals summary card, steps
         DashboardGoalCard(
             icon  = Icons.Default.DirectionsRun,
             title = "Daily Steps",
@@ -555,7 +603,7 @@ fun DashboardContent( navController: NavController,
         )
 
         Spacer(modifier = Modifier.size(8.dp))
-
+        // Goals Summary card, weekly sessions
         DashboardGoalCard(
             icon  = Icons.Default.FitnessCenter,
             title = "Weekly Workouts",
@@ -589,6 +637,7 @@ fun DashboardGoalCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
+        // tinted circular icon container
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -608,7 +657,7 @@ fun DashboardGoalCard(
                 )
             }
             Spacer(modifier = Modifier.width(14.dp))
-
+            // rounded linear progress bar
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title, style = MaterialTheme.typography.labelMedium,
@@ -676,7 +725,7 @@ fun GoalsSection() {
 
         LinearProgressIndicator(progress = percent)
 
-        Text("$progress / $steps steps")
+        Text("You have completed $progress of $steps steps goal today")
 
     }
 }

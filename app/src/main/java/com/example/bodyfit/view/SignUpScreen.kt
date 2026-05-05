@@ -52,17 +52,33 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 
-
+/**
+ * New-user registration screen.
+ * Collects:
+ *  - Display name
+ *  - Email address
+ *  - Password
+ *  - Confirm password
+* On successful registration:
+*  1. Firebase Auth creates the account via CreateUserWithEmailAndPassword
+*  2. A Firestore document is written at `users/{uid}` with the user's name,
+*     email, and UID
+*  3. The user is navigated back to Login with a toast instructing them to log in
+* Error handling:
+*  - All four fields show inline red error labels when blank or invalid
+*  - Firebase errors for example email already in use, surface as Toast messages
+**/
 @Composable
 fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
-
+    // Form state at the beginning
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    // controls the visibility of password characters
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
-
+    // inline validation error messages
     var nameError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
     var emailError by remember { mutableStateOf("") }
@@ -70,7 +86,7 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
 
     val context = LocalContext.current
 
-
+    // Lottie animation to load the gym trainer animation
     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.gymtrainer))
     val progress by animateLottieCompositionAsState(
         isPlaying = true,
@@ -79,13 +95,14 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
         speed = 0.7f
     )
 
-
+    // Registration UI definition
     Column (
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues),
         horizontalAlignment = Alignment.CenterHorizontally
     ){
+        // Animated gym trainer display
         LottieAnimation(
             modifier = Modifier
                 .size(200.dp)
@@ -108,7 +125,7 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
             fontWeight = FontWeight.Light)
 
         Spacer(modifier = Modifier.height(5.dp))
-
+        // Name input field that becomes error field if empty
         TextField(value = name, onValueChange = {
             name =it
         }, label = {
@@ -128,7 +145,7 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
         )
 
         Spacer(modifier = Modifier.height(5.dp))
-
+        // Email field that becomes error field if empty
         TextField(value = email, onValueChange = {
             email =it
         }, label = {
@@ -147,7 +164,7 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
             )
         )
         Spacer(modifier = Modifier.height(5.dp))
-
+        // Password field that has visibility toggle
         TextField(value = password, onValueChange = {
             password = it
         }, label = {
@@ -179,7 +196,7 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
             )
         )
         Spacer(modifier = Modifier.height(5.dp))
-
+        // Confirm password field. Validates that the characters in password and confirm password fileds match
         TextField(value = confirmPassword, onValueChange = {
             confirmPassword = it
         }, label = {
@@ -210,23 +227,26 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
                 unfocusedIndicatorColor = Transparent
             )
         )
-
+        // Register button that validates all the input fields and then calls the firebase auth for user creation
         Spacer(modifier = Modifier.height(5.dp))
         Button(onClick = {
+            // validation of nameError, EmailError, PasswordError, and ConfirmPasswordError
             nameError = if (name.isBlank()) "Name is required!!" else ""
             emailError =  if (email.isBlank()) "Email is required!!"
             else if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) "Enter a valid email address!!" else ""
             passwordError =  if (password.isBlank()) "Password is required!!" else ""
             confirmPasswordError = if (confirmPassword.isBlank()) "Confirm password is required!!"
             else (if (password != confirmPassword) "Passowrd and confirm password do not match!!" else "")
+                // only proceed with registration if all fields pass registration hence use of &, and symbol
                 if (nameError.isEmpty() && emailError.isEmpty() && passwordError.isEmpty() && confirmPasswordError.isEmpty()) {
-                    // sign up logic after clicking register button
+                    // sign up logic after clicking register button is executed as follows
                     val auth = Firebase.auth
                     val usersDB = FirebaseFirestore.getInstance()
-
+                    // create the firebase auth account first
                     auth.createUserWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
+                                // after creation, persist use info into in firestore with document ID as user id for easy retrieval
                                 val userID = auth.currentUser?.uid
                                 val userData = hashMapOf(
                                     "uid" to userID,
@@ -239,16 +259,19 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
                                         .set(userData)
                                         .addOnSuccessListener {
                                             Toast.makeText(context, "Sign Up is Successful, Please Login", Toast.LENGTH_SHORT).show()
+                                            // Return to login screen and remove register screen from backstack
                                             navController.navigate("login") {
                                                 popUpTo("signup") { inclusive = true}
                                             }
                                         }
+                                        // auth succeeded but firestore write failed, use can still login but the data will be incomplete
                                         .addOnFailureListener {
                                             Toast.makeText(context, "User Created but failed to save details", Toast.LENGTH_SHORT).show()
                                         }
                                 }
 
                             }
+                            // show the failure message if firebase as rejected the registration
                             else {
 
                                 Toast.makeText(context, "Sign Up Failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
@@ -262,7 +285,7 @@ fun SignUpScreen(navController: NavController, paddingValues: PaddingValues) {
             Text("Register")
         }
         Spacer(modifier = Modifier.height(16.dp))
-
+        // Link back to users who have the an account registered
         TextButton(onClick = {
             navController.navigate("login")
         }) {

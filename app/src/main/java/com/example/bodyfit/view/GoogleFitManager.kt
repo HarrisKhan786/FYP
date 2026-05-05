@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 object GoogleFitManager {
 
-//    reads the current steps from google fit API and then stores them in firestore
+    //  reads the current steps from google fit API and then stores them in firestore
     fun readAndSyncSteps(
         context: Context,
         onResult: (Int) -> Unit = {}
@@ -49,7 +49,7 @@ object GoogleFitManager {
             }
     }
 
-    /** Kept for backward-compat – delegates to readAndSyncSteps. */
+    //Kept for backward-compat, delegates to readAndSyncSteps
     fun readSteps(context: Context, onResult: (Int) -> Unit) =
         readAndSyncSteps(context, onResult)
 

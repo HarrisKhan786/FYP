@@ -1,5 +1,7 @@
 package com.example.bodyfit.view
 
+// Immutable data class that represents the current state of a user's progress, against their fitness goals.
+// It is a single model shared between repository, viewmodel, and progress screen.
 data class ProgressData(
     val stepsProgress: Int = 0,
     val dailyStepsGoal: Int = 0,
